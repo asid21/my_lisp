@@ -3,10 +3,8 @@
 #include <stdbool.h>
 #include <string.h>
 
-#define CHECKFUNC(A,B) (!strncmp(d->car->raw,A,d->car->len)&&d->car->len==B)
-
-char mallocsc = 0;
-long long mallocs[256] = {0};
+#define BUFSIZE 4096
+#define CHECKFUNC(A,B) ((d->car->len==B)&&!strncmp(d->car->raw,A,d->car->len))
 
 enum type {
     none=0, symbol, cons
@@ -31,11 +29,6 @@ struct cell *apply(struct cell*, struct cell*);
 struct cell *getCellAddr() {
     struct cell *out = malloc(sizeof(struct cell));
     memset(out, 0, sizeof(struct cell));
-
-    if (mallocsc < 255) {
-        mallocs[mallocsc++] = out;
-    }
-
     return out;
 }
 
@@ -43,13 +36,6 @@ void freeAndClean(struct cell *to_free) {
     if (to_free != NULL) {
         memset(to_free, 0, sizeof(struct cell));
         free(to_free);
-
-        int i;
-        for (i=0; i < mallocsc ;i++) {
-            if (mallocs[i] == to_free) {
-                mallocs[i] = 0;
-            }
-        }
     }
 }
 
@@ -83,7 +69,7 @@ struct cell *assoc(struct cell *d, struct cell *list) {
     if (d -> type == cons || list == NULL) {
         return NULL;
     }
-    
+
     if (!strncmp(d -> raw, list -> car -> car -> raw, d -> len) && d -> len == list -> car -> car -> len) {
         return list -> car;
     }
@@ -95,7 +81,7 @@ struct cell *map(struct cell *list, struct cell *env) {
     if (list == NULL) {
         return NULL;
     }
-    
+
     out = getCons(eval(list -> car, env), map(list -> cdr, env));
     return out;
 }
@@ -105,19 +91,26 @@ struct cell *eval(struct cell *d, struct cell *env) {
     if (d == NULL) {
         return NULL;
     }
-    
+
     switch (d -> type) {
         case symbol:
             out = assoc(d, env);
             if (out != NULL) {
                 out = out -> cdr;
+            } else {
+                int i;
+                fprintf(stderr, "[eval] can't find ");
+                for (i=0; i < (d -> len) ;i++) {
+                    fprintf(stderr, "%c", d -> raw[i]);
+                }
+                fprintf(stderr, "\n");
             }
             break;
-            
+
         case cons:
             out = apply(d, env);
             break;
-        
+
         default:
             fprintf(stderr, "[error] not able to eval none\n");
             break;
@@ -134,7 +127,7 @@ struct cell *apply(struct cell *d, struct cell *env) {
                 switch ((temp -> car -> raw)[0] - '0') {
                     case 0:
                         temp = map(d -> cdr, env);
-                        
+
                         if (CHECKFUNC("car", 3)) {
                             out = temp -> car -> car;
                         } else if (CHECKFUNC("cdr", 3)) {
@@ -153,10 +146,10 @@ struct cell *apply(struct cell *d, struct cell *env) {
                             } else {
                                 out = NULL;
                             }
-                        }
-                        
+}
+
                         break;
-                    
+
                     case 1:
                         if (CHECKFUNC("quote", 5)) {
                             out = d -> cdr -> car;
@@ -171,22 +164,22 @@ struct cell *apply(struct cell *d, struct cell *env) {
                             out = getCons(changeStringToSymbol("2"), getCons(d -> cdr, getCons(env, NULL)));
                         }
                         break;
-                    
+
                     case 2:
                         maptemp = map(d -> cdr, env);
                         out = eval(temp -> cdr -> car -> cdr -> car, getCons(getCons(temp -> cdr -> car -> car, maptemp -> car), temp -> cdr -> cdr -> car));
-                        
+
                         for (d=d->cdr; d -> cdr != NULL ;d=d->cdr) {
                             maptemp = map(d -> cdr, env);
                             out = eval(out -> cdr -> car -> cdr -> car, getCons(getCons(out -> cdr -> car -> car, maptemp -> car), out -> cdr -> cdr -> car));
                         }
                         break;
-                    
+
                     default: break;
                 }
             }
             break;
-        
+
         default:
             fprintf(stderr, "[error] not able to apply none or symbol\n");
             break;
@@ -209,15 +202,23 @@ void debugPrint(struct cell *to_print) {
                     putchar(to_print -> raw[i]);
                 }
                 break;
-                
+
             case cons:
                 printf("(");
                 debugPrint(to_print -> car);
-                printf(" . ");
-                debugPrint(to_print -> cdr);
+                while (to_print -> cdr != NULL && to_print -> cdr -> type == cons) {
+                    printf(" ");
+                    debugPrint(to_print -> cdr -> car);
+                    to_print = to_print -> cdr;
+                    if (to_print == NULL) break;
+                }
+                if (to_print -> cdr != NULL) {
+                    printf(" . ");
+                    debugPrint(to_print -> cdr);
+                }
                 printf(")");
                 break;
-                
+
             default:
                 fprintf(stderr, "[error] type is none\n");
                 break;
@@ -229,13 +230,13 @@ struct cell *debugRead(char *s) {
     struct cell *out = NULL, *tmp, *fath = NULL;
     int i;
     while (*s == ' ') s++;
-    
+
     if (*s == '(') {
         for (s=s+1,tmp=NULL;;) {
             while (*s == ' ' || *s == '\n') s++;
             if (*s == '(') {
                 out = ccons(debugRead(s), NULL);
-                
+
                 if (tmp != NULL) tmp -> cdr = out;
                 else fath = out;
                 tmp = out;
@@ -250,7 +251,7 @@ struct cell *debugRead(char *s) {
                 break;
             } else {
                 out = ccons(debugRead(s), NULL);
-                
+
                 if (out -> car -> raw[0] == '.' && out -> car -> len == 1) {
                     freeCellAddr(out);
                     out = debugRead(++s);
@@ -290,7 +291,7 @@ struct cell *debugRead(char *s) {
 #endif
 
 int main() {
-    char s[2048];
+    char s[BUFSIZE];
     struct cell *tmp = NULL, *env;
 
     env = debugRead("((nil .) (t . t) (car 0) (cdr 0) (cons 0) (eq 0) (atom 0) (quote 1) (if 1) (lambda 1))");
@@ -304,11 +305,7 @@ int main() {
 
     freeCellAddr(tmp);
     freeCellAddr(env);
-    
+
     printf("\n");
-    for (s[0]=0; s[0] < mallocsc ;s[0]++) {
-        mallocs[s[0]] && printf("%p\n", (struct cell*)(mallocs[s[0]]));
-    }
-    debugRead("");
     return 0;
 }

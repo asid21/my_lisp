@@ -1,0 +1,1 @@
+((lambda f (lambda data (f f nil data)))(lambda self (lambda out (lambda data (if (atom data)(if (eq nil data) out (cons data out))(self self (cons (car data) out)(cdr data))))))(quote (1 2 3 4 5)))
