@@ -146,8 +146,7 @@ struct cell *apply(struct cell *d, struct cell *env) {
                             } else {
                                 out = NULL;
                             }
-}
-
+                        }
                         break;
 
                     case 1:
@@ -187,11 +186,7 @@ struct cell *apply(struct cell *d, struct cell *env) {
     return out;
 }
 
-#ifndef DISABLE_DEBUG
-#define ccons getCons
-#define csymb changeStringToSymbol
-
-void debugPrint(struct cell *to_print) {
+void Print(struct cell *to_print) {
     size_t i;
     if (to_print == NULL) {
         printf("nil");
@@ -205,16 +200,16 @@ void debugPrint(struct cell *to_print) {
 
             case cons:
                 printf("(");
-                debugPrint(to_print -> car);
+                Print(to_print -> car);
                 while (to_print -> cdr != NULL && to_print -> cdr -> type == cons) {
                     printf(" ");
-                    debugPrint(to_print -> cdr -> car);
+                    Print(to_print -> cdr -> car);
                     to_print = to_print -> cdr;
                     if (to_print == NULL) break;
                 }
                 if (to_print -> cdr != NULL) {
                     printf(" . ");
-                    debugPrint(to_print -> cdr);
+                    Print(to_print -> cdr);
                 }
                 printf(")");
                 break;
@@ -226,7 +221,7 @@ void debugPrint(struct cell *to_print) {
     }
 }
 
-struct cell *debugRead(char *s) {
+struct cell *Read(char *s) {
     struct cell *out = NULL, *tmp, *fath = NULL;
     int i;
     while (*s == ' ') s++;
@@ -235,7 +230,7 @@ struct cell *debugRead(char *s) {
         for (s=s+1,tmp=NULL;;) {
             while (*s == ' ' || *s == '\n') s++;
             if (*s == '(') {
-                out = ccons(debugRead(s), NULL);
+                out = getCons(Read(s), NULL);
 
                 if (tmp != NULL) tmp -> cdr = out;
                 else fath = out;
@@ -250,13 +245,13 @@ struct cell *debugRead(char *s) {
             } else if (*s == ')') {
                 break;
             } else {
-                out = ccons(debugRead(s), NULL);
+                out = getCons(Read(s), NULL);
 
                 if (out -> car -> raw[0] == '.' && out -> car -> len == 1) {
                     freeCellAddr(out);
-                    out = debugRead(++s);
+                    out = Read(++s);
                     while (*s == ' ' || *s == '\n') s++;
-                    fath = ccons(tmp -> car, out);
+                    fath = getCons(tmp -> car, out);
                     freeAndClean(tmp);
                     break;
                 } else {
@@ -288,18 +283,16 @@ struct cell *debugRead(char *s) {
     return out;
 }
 
-#endif
-
 int main() {
     char s[BUFSIZE];
     struct cell *tmp = NULL, *env;
 
-    env = debugRead("((nil .) (t . t) (car 0) (cdr 0) (cons 0) (eq 0) (atom 0) (quote 1) (if 1) (lambda 1))");
+    env = Read("((nil .) (t . t) (car 0) (cdr 0) (cons 0) (eq 0) (atom 0) (quote 1) (if 1) (lambda 1))");
 
     printf("> ");
     while (fgets(s, sizeof(s)/sizeof(s[0]), stdin)) {
-        tmp = debugRead(s);
-        debugPrint(eval(tmp, env));
+        tmp = Read(s);
+        Print(eval(tmp, env));
         printf("\n> ");
     }
 
